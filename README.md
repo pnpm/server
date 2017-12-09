@@ -1,5 +1,7 @@
 # @pnpm/server
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/pnpm/server.svg)](https://greenkeeper.io/)
+
 > A pnpm installer server
 
 <!--@shields('npm', 'travis')-->
