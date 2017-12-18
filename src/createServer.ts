@@ -3,89 +3,73 @@ import {
   RequestPackageOptions,
   WantedDependency,
 } from '@pnpm/package-requester'
-import JsonSocket = require('json-socket')
-import net = require('net')
+
+import bodyParser = require('body-parser')
+import {Request, Response} from 'express';
+import express = require('express')
+import http = require('http')
+
 import {StoreController} from 'package-store'
 
 export default function (
   store: StoreController,
-  opts: object,
+  opts: {
+    path: string;
+  },
 ) {
-  const server = net.createServer()
-  server.listen(opts)
-  server.on('connection', (socket) => {
-    const jsonSocket = new JsonSocket(socket)
-    const requestPackage = requestPackageWithCtx.bind(null, {jsonSocket, store})
+  const packageResponses = {}
 
-    jsonSocket.on('message', async (message) => {
-      switch (message.action) {
-        case 'requestPackage': {
-          await requestPackage(message.msgId, message.args[0], message.args[1])
-          return
-        }
-        case 'prune': {
-          await store.prune()
-          return
-        }
-        case 'updateConnections': {
-          await store.updateConnections(message.args[0], message.args[1])
-          return
-        }
-        case 'saveState': {
-          await store.saveState()
-          return
-        }
-      }
-    })
+  const app = express()
+  app.use(bodyParser.json({
+    limit: '10mb',
+  }))
+
+  app.post('/requestPackage', async (request: Request, response: Response) => {
+    const {msgId, wantedDependency, options} = request.body
+    if (!packageResponses[msgId]) {
+      packageResponses[msgId] = await store.requestPackage(wantedDependency, options)
+    }
+    response.json(packageResponses[msgId])
   })
 
+  app.post('/packageFilesResponse', async (request: Request, response: Response) => {
+    const fetchingFiles = await packageResponses[request.body.msgId].fetchingFiles
+    delete packageResponses[request.body.msgId].fetchingFiles
+    garbageCollectResponses(packageResponses, request.body.msgId)
+    response.json(fetchingFiles)
+  })
+
+  app.post('/manifestResponse', async (request: Request, response: Response) => {
+    const fetchingManifest = await packageResponses[request.body.msgId].fetchingManifest
+    delete packageResponses[request.body.msgId].fetchingManifest
+    garbageCollectResponses(packageResponses, request.body.msgId)
+    response.json(fetchingManifest)
+  })
+
+  app.post('/prune', async (request: Request, response: Response) => {
+    await store.prune()
+    response.json('OK')
+  })
+
+  app.post('/saveState', async (request: Request, response: Response) => {
+    await store.saveState()
+    response.json('OK')
+  })
+
+  app.post('/updateConnections', async (request: Request, response: Response) => {
+    await store.updateConnections(request.body.prefix, request.body.opts)
+    response.json('OK')
+  })
+
+  const listener = app.listen(opts.path)
+
   return {
-    close: () => server.close(),
+    close: () => listener.close(() => { return }),
   }
 }
 
-async function requestPackageWithCtx (
-  ctx: {
-    jsonSocket: JsonSocket,
-    store: StoreController,
-  },
-  msgId: string,
-  wantedDependency: WantedDependency,
-  options: RequestPackageOptions,
-) {
-  const packageResponse = await ctx.store.requestPackage(wantedDependency, options) // TODO: If this fails, also return the error
-  ctx.jsonSocket.sendMessage({
-    action: `packageResponse:${msgId}`,
-    body: packageResponse,
-  }, (err) => err && console.error(err))
-
-  if (!packageResponse.isLocal) {
-    packageResponse.fetchingFiles
-      .then((packageFilesResponse) => {
-        ctx.jsonSocket.sendMessage({
-          action: `packageFilesResponse:${msgId}`,
-          body: packageFilesResponse,
-        }, (err) => err && console.error(err))
-      })
-      .catch((err) => {
-        ctx.jsonSocket.sendMessage({
-          action: `packageFilesResponse:${msgId}`,
-          err,
-        }, (merr) => merr && console.error(merr))
-      })
-
-    packageResponse.fetchingManifest
-      .then((manifestResponse) => {
-        ctx.jsonSocket.sendMessage({
-          action: `manifestResponse:${msgId}`,
-          body: manifestResponse,
-        }, (err) => err && console.error(err))
-      })
-      .catch((err) => {
-        ctx.jsonSocket.sendMessage({
-          action: `manifestResponse:${msgId}`,
-          err,
-        }, (merr) => merr && console.error(merr))
-      })
+function garbageCollectResponses (packageResponses: object, msgId: string) {
+  if (!packageResponses[msgId].fetchingFiles && !packageResponses[msgId].fetchingManifest) {
+    delete packageResponses[msgId]
   }
 }

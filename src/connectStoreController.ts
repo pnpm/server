@@ -5,120 +5,115 @@ import {
   Resolution,
   WantedDependency,
 } from '@pnpm/package-requester'
-import JsonSocket = require('json-socket')
-import net = require('net')
+
+import request = require('request-promise-native')
+
 import {StoreController} from 'package-store'
 import uuid = require('uuid')
 
 export default function (
-  initOpts: object,
+  initOpts: {
+    path: string;
+  },
 ): Promise<StoreController> {
-  const socket = new JsonSocket(new net.Socket());
-  socket.connect(initOpts as any) // tslint:disable-line
+  const remotePrefix = `http://unix:${initOpts.path}:`
 
   return new Promise((resolve, reject) => {
-    socket.on('connect', () => {
-      const waiters = createWaiters()
-
-      socket.on('message', (message) => {
-        if (message.err) {
-          waiters.reject(message.action, message.err)
-        } else {
-          waiters.resolve(message.action, message.body)
-        }
-      })
-
-      resolve({
-        close: async () => {
-          socket.end()
-        },
-        prune: async () => {
-          socket.sendMessage({
-            action: 'prune',
-          }, (err) => err && console.error(err))
-        },
-        requestPackage: requestPackage.bind(null, socket, waiters),
-        saveState: async () => {
-          socket.sendMessage({
-            action: 'saveState',
-          }, (err) => err && console.error(err))
-        },
-        updateConnections: async (prefix: string, opts: {addDependencies: string[], removeDependencies: string[], prune: boolean}) => {
-          socket.sendMessage({
-            action: 'updateConnections',
-            args: [prefix, opts],
-          }, (err) => err && console.error(err))
-        },
-      })
+    resolve({
+      close: async () => { return },
+      prune: async () => {
+        await retryRequest({
+          json: true,
+          method: 'POST',
+          url: `${remotePrefix}/prune`,
+        })
+      },
+      requestPackage: requestPackage.bind(null, remotePrefix),
+      saveState: async () => {
+        await retryRequest({
+          json: true,
+          method: 'POST',
+          url: `${remotePrefix}/saveState`,
+        })
+      },
+      updateConnections: async (prefix: string, opts: {addDependencies: string[], removeDependencies: string[], prune: boolean}) => {
+        await retryRequest({
+          body: {
+            opts,
+            prefix,
+          },
+          json: true,
+          method: 'POST',
+          url: `${remotePrefix}/updateConnections`,
+        })
+      },
     })
   })
 }
 
-function createWaiters () {
-  const waiters = {}
-  return {
-    add (id: string) {
-      waiters[id] = deffered()
-      return waiters[id].promise
-    },
-    resolve (id: string, obj: object) {
-      if (waiters[id]) {
-        waiters[id].resolve(obj)
-      }
-    },
-    reject (id: string, err: object) {
-      if (waiters[id]) {
-        waiters[id].reject(err)
-      }
-    },
+let inflightCount = 0
+let errorCount = 0
+
+function retryRequest (options: any): any { // tslint:disable-line
+  if (inflightCount > 100) {
+    return new Promise((resolve, reject) => {
+      setTimeout(resolve, 100)
+    }).then(() => {
+      return retryRequest(options)
+    })
   }
-}
-
-// tslint:disable-next-line
-function noop () {}
-
-function deffered<T> (): {
-  promise: Promise<T>,
-  resolve: (v: T) => void,
-  reject: (err: Error) => void,
-} {
-  let pResolve: (v: T) => void = noop
-  let pReject: (err: Error) => void = noop
-  const promise = new Promise<T>((resolve, reject) => {
-    pResolve = resolve
-    pReject = reject
+  inflightCount += 1
+  return request(options).catch((e) => {
+    inflightCount -= 1
+    if (!e.message.startsWith('Error: connect ECONNRESET') && !e.message.startsWith('Error: connect ECONNREFUSED')) {
+      throw e
+    }
+    console.log('again', errorCount++, inflightCount)
+    return retryRequest(options)
+  }).then((data) => {
+    inflightCount -= 1
+    return data
   })
-  return {
-    promise,
-    reject: pReject,
-    resolve: pResolve,
-  }
 }
 
 function requestPackage (
-  socket: JsonSocket,
-  waiters: object,
+  remotePrefix: string,
   wantedDependency: WantedDependency,
   options: RequestPackageOptions,
 ): Promise<PackageResponse> {
   const msgId = uuid.v4()
 
-  const fetchingManifest = waiters['add'](`manifestResponse:${msgId}`) // tslint:disable-line
-  const fetchingFiles = waiters['add'](`packageFilesResponse:${msgId}`) // tslint:disable-line
-  const response = waiters['add'](`packageResponse:${msgId}`) // tslint:disable-line
-    .then((packageResponse: object) => {
-      return Object.assign(packageResponse, {
-        fetchingFiles,
-        fetchingManifest,
-        finishing: Promise.all([fetchingManifest, fetchingFiles]).then(() => undefined),
-      })
+  return retryRequest({
+    body: {
+      msgId,
+      options,
+      wantedDependency,
+    },
+    json: true,
+    method: 'POST',
+    url: `${remotePrefix}/requestPackage`,
+  })
+  .then((packageResponse: PackageResponse) => {
+    const fetchingManifest = retryRequest({
+      body: {
+        msgId,
+      },
+      json: true,
+      method: 'POST',
+      url: `${remotePrefix}/manifestResponse`,
     })
-
-  socket.sendMessage({
-    action: 'requestPackage',
-    args: [wantedDependency, options],
-    msgId,
-  }, (err) => err && console.error(err))
-
-  return response
+    const fetchingFiles = retryRequest({
+      body: {
+        msgId,
+      },
+      json: true,
+      method: 'POST',
+      url: `${remotePrefix}/packageFilesResponse`,
+    })
+    return Object.assign(packageResponse, {
+      fetchingFiles,
+      fetchingManifest,
+      finishing: Promise.all([fetchingManifest, fetchingFiles]).then(() => undefined),
+    })
+  })
 }
