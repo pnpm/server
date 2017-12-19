@@ -9,8 +9,6 @@ import {
 import createResolver from '@pnpm/npm-resolver'
 import createFetcher from '@pnpm/tarball-fetcher'
 import createStore from 'package-store'
-import net = require('net')
-import JsonSocket = require('json-socket')
 
 test('server', async t => {
   const registry = 'https://registry.npmjs.org/'

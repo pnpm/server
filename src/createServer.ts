@@ -1,5 +1,4 @@
 import http = require('http')
-
 import {IncomingMessage, Server, ServerResponse} from 'http'
 import {StoreController} from 'package-store'
 
@@ -35,11 +34,10 @@ export default function (
 
         switch (req.url) {
           case '/requestPackage':
-            const {msgId, wantedDependency, options} = body
-            const pkgResponse = await store.requestPackage(wantedDependency, options)
+            const pkgResponse = await store.requestPackage(body.wantedDependency, body.options)
             if (!pkgResponse.isLocal) {
-              manifestPromises[msgId] = pkgResponse.fetchingManifest
-              filesPromises[msgId] = pkgResponse.fetchingFiles
+              manifestPromises[body.msgId] = pkgResponse.fetchingManifest
+              filesPromises[body.msgId] = pkgResponse.fetchingFiles
             }
             res.end(JSON.stringify(pkgResponse))
             break
