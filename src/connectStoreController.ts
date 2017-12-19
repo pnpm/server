@@ -6,6 +6,7 @@ import {
   WantedDependency,
 } from '@pnpm/package-requester'
 
+import pLimit = require('p-limit')
 import request = require('request-promise-native')
 
 import {StoreController} from 'package-store'
@@ -17,27 +18,28 @@ export default function (
   },
 ): Promise<StoreController> {
   const remotePrefix = `http://unix:${initOpts.path}:`
+  const limitedRetryRequest = retryRequest.bind(null, pLimit(100))
 
   return new Promise((resolve, reject) => {
     resolve({
       close: async () => { return },
       prune: async () => {
-        await retryRequest({
+        await limitedRetryRequest({
           json: true,
           method: 'POST',
           url: `${remotePrefix}/prune`,
         })
       },
-      requestPackage: requestPackage.bind(null, remotePrefix),
+      requestPackage: requestPackage.bind(null, remotePrefix, limitedRetryRequest),
       saveState: async () => {
-        await retryRequest({
+        await limitedRetryRequest({
           json: true,
           method: 'POST',
           url: `${remotePrefix}/saveState`,
         })
       },
       updateConnections: async (prefix: string, opts: {addDependencies: string[], removeDependencies: string[], prune: boolean}) => {
-        await retryRequest({
+        await limitedRetryRequest({
           body: {
             opts,
             prefix,
@@ -51,39 +53,26 @@ export default function (
   })
 }
 
-let inflightCount = 0
-let errorCount = 0
-
-function retryRequest (options: any): any { // tslint:disable-line
-  if (inflightCount > 100) {
-    return new Promise((resolve, reject) => {
-      setTimeout(resolve, 100)
-    }).then(() => {
-      return retryRequest(options)
-    })
-  }
-  inflightCount += 1
-  return request(options).catch((e) => {
-    inflightCount -= 1
+function retryRequest<T> (limit: (fn: () => PromiseLike<T>) => Promise<T>, options: any): any { // tslint:disable-line
+  return limit(() => {
+    return request(options)
+  }).catch((e) => {
     if (!e.message.startsWith('Error: connect ECONNRESET') && !e.message.startsWith('Error: connect ECONNREFUSED')) {
       throw e
     }
-    console.log('again', errorCount++, inflightCount)
-    return retryRequest(options)
-  }).then((data) => {
-    inflightCount -= 1
-    return data
+    return retryRequest(limit, options)
   })
 }
 
 function requestPackage (
   remotePrefix: string,
+  limitedRetryRequest: (options: any) => any, // tslint:disable-line
   wantedDependency: WantedDependency,
   options: RequestPackageOptions,
 ): Promise<PackageResponse> {
   const msgId = uuid.v4()
 
-  return retryRequest({
+  return limitedRetryRequest({
     body: {
       msgId,
       options,
@@ -94,7 +83,7 @@ function requestPackage (
     url: `${remotePrefix}/requestPackage`,
   })
   .then((packageResponse: PackageResponse) => {
-    const fetchingManifest = retryRequest({
+    const fetchingManifest = limitedRetryRequest({
       body: {
         msgId,
       },
@@ -102,7 +91,7 @@ function requestPackage (
       method: 'POST',
       url: `${remotePrefix}/manifestResponse`,
     })
-    const fetchingFiles = retryRequest({
+    const fetchingFiles = limitedRetryRequest({
       body: {
         msgId,
       },

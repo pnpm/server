@@ -1,14 +1,6 @@
-import {
-  RequestPackageFunction,
-  RequestPackageOptions,
-  WantedDependency,
-} from '@pnpm/package-requester'
-
-import bodyParser = require('body-parser')
-import {Request, Response} from 'express';
-import express = require('express')
 import http = require('http')
 
+import {IncomingMessage, ServerResponse} from 'http'
 import {StoreController} from 'package-store'
 
 export default function (
@@ -17,59 +9,71 @@ export default function (
     path: string;
   },
 ) {
-  const packageResponses = {}
+  const manifestPromises = {}
+  const filesPromises = {}
 
-  const app = express()
-  app.use(bodyParser.json({
-    limit: '10mb',
-  }))
-
-  app.post('/requestPackage', async (request: Request, response: Response) => {
-    const {msgId, wantedDependency, options} = request.body
-    if (!packageResponses[msgId]) {
-      packageResponses[msgId] = await store.requestPackage(wantedDependency, options)
+  const server = http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.method !== 'POST') {
+      res.statusCode = 503
+      res.end(JSON.stringify(`Only POST is allowed, received ${req.method}`))
+      return
     }
-    response.json(packageResponses[msgId])
+
+    let body: any = '' // tslint:disable-line
+    req.on('data', (data) => {
+      body += data
+    })
+    req.on('end', async () => {
+      try {
+        if (body.length > 0) {
+          body = JSON.parse(body)
+        } else {
+          body = {}
+        }
+
+        switch (req.url) {
+          case '/requestPackage':
+            const {msgId, wantedDependency, options} = body
+            const pkgResponse = await store.requestPackage(wantedDependency, options)
+            if (!pkgResponse.isLocal) {
+              manifestPromises[msgId] = pkgResponse.fetchingManifest
+              filesPromises[msgId] = pkgResponse.fetchingFiles
+            }
+            res.end(JSON.stringify(pkgResponse))
+            break
+          case '/packageFilesResponse':
+            const filesResponse = await filesPromises[body.msgId]
+            delete filesPromises[body.msgId]
+            res.end(JSON.stringify(filesResponse))
+            break
+          case '/manifestResponse':
+            const manifestResponse = await manifestPromises[body.msgId]
+            delete manifestPromises[body.msgId]
+            res.end(JSON.stringify(manifestResponse))
+            break
+          case '/updateConnections':
+            await store.updateConnections(body.prefix, body.opts)
+            res.end(JSON.stringify('OK'))
+            break
+          case '/prune':
+            await store.prune()
+            res.end(JSON.stringify('OK'))
+            break
+          case '/saveState':
+            await store.saveState()
+            res.end(JSON.stringify('OK'))
+            break
+        }
+      } catch (e) {
+        res.statusCode = 503
+        res.end(JSON.stringify(e.message))
+      }
+    })
   })
 
-  app.post('/packageFilesResponse', async (request: Request, response: Response) => {
-    const fetchingFiles = await packageResponses[request.body.msgId].fetchingFiles
-    delete packageResponses[request.body.msgId].fetchingFiles
-    garbageCollectResponses(packageResponses, request.body.msgId)
-    response.json(fetchingFiles)
-  })
-
-  app.post('/manifestResponse', async (request: Request, response: Response) => {
-    const fetchingManifest = await packageResponses[request.body.msgId].fetchingManifest
-    delete packageResponses[request.body.msgId].fetchingManifest
-    garbageCollectResponses(packageResponses, request.body.msgId)
-    response.json(fetchingManifest)
-  })
-
-  app.post('/prune', async (request: Request, response: Response) => {
-    await store.prune()
-    response.json('OK')
-  })
-
-  app.post('/saveState', async (request: Request, response: Response) => {
-    await store.saveState()
-    response.json('OK')
-  })
-
-  app.post('/updateConnections', async (request: Request, response: Response) => {
-    await store.updateConnections(request.body.prefix, request.body.opts)
-    response.json('OK')
-  })
-
-  const listener = app.listen(opts.path)
+  const listener = server.listen(opts.path)
 
   return {
     close: () => listener.close(() => { return }),
-  }
-}
-
-function garbageCollectResponses (packageResponses: object, msgId: string) {
-  if (!packageResponses[msgId].fetchingFiles && !packageResponses[msgId].fetchingManifest) {
-    delete packageResponses[msgId]
   }
 }
