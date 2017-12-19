@@ -1,6 +1,20 @@
 import http = require('http')
 import {IncomingMessage, Server, ServerResponse} from 'http'
+
+import {RequestPackageOptions, WantedDependency} from '@pnpm/package-requester'
 import {StoreController} from 'package-store'
+
+interface RequestBody {
+  msgId: string,
+  wantedDependency: WantedDependency,
+  options: RequestPackageOptions,
+  prefix: string,
+  opts: {
+    addDependencies: string[];
+    removeDependencies: string[];
+    prune: boolean;
+  }
+}
 
 export default function (
   store: StoreController,
@@ -20,55 +34,70 @@ export default function (
       return
     }
 
-    let body: any = '' // tslint:disable-line
-    req.on('data', (data) => {
-      body += data
-    })
-    req.on('end', async () => {
-      try {
-        if (body.length > 0) {
-          body = JSON.parse(body)
-        } else {
-          body = {}
+    const bodyPromise = new Promise<RequestBody>((resolve, reject) => {
+      let body: any = '' // tslint:disable-line
+      req.on('data', (data) => {
+        body += data
+      })
+      req.on('end', async () => {
+        try {
+          if (body.length > 0) {
+            body = JSON.parse(body)
+          } else {
+            body = {}
+          }
+          resolve(body)
+        } catch (e) {
+          reject(e)
         }
+      })
+    })
 
-        switch (req.url) {
-          case '/requestPackage':
-            const pkgResponse = await store.requestPackage(body.wantedDependency, body.options)
-            if (!pkgResponse.isLocal) {
-              manifestPromises[body.msgId] = pkgResponse.fetchingManifest
-              filesPromises[body.msgId] = pkgResponse.fetchingFiles
-            }
-            res.end(JSON.stringify(pkgResponse))
-            break
-          case '/packageFilesResponse':
-            const filesResponse = await filesPromises[body.msgId]
-            delete filesPromises[body.msgId]
-            res.end(JSON.stringify(filesResponse))
-            break
-          case '/manifestResponse':
-            const manifestResponse = await manifestPromises[body.msgId]
-            delete manifestPromises[body.msgId]
-            res.end(JSON.stringify(manifestResponse))
-            break
-          case '/updateConnections':
-            await store.updateConnections(body.prefix, body.opts)
-            res.end(JSON.stringify('OK'))
-            break
-          case '/prune':
-            await store.prune()
-            res.end(JSON.stringify('OK'))
-            break
-          case '/saveState':
-            await store.saveState()
-            res.end(JSON.stringify('OK'))
-            break
-        }
-      } catch (e) {
-        res.statusCode = 503
-        res.end(JSON.stringify(e.message))
+    try {
+      let body: RequestBody
+      switch (req.url) {
+        case '/requestPackage':
+          body = await bodyPromise
+          const pkgResponse = await store.requestPackage(body.wantedDependency, body.options)
+          if (!pkgResponse.isLocal) {
+            manifestPromises[body.msgId] = pkgResponse.fetchingManifest
+            filesPromises[body.msgId] = pkgResponse.fetchingFiles
+          }
+          res.end(JSON.stringify(pkgResponse))
+          break
+        case '/packageFilesResponse':
+          body = await bodyPromise
+          const filesResponse = await filesPromises[body.msgId]
+          delete filesPromises[body.msgId]
+          res.end(JSON.stringify(filesResponse))
+          break
+        case '/manifestResponse':
+          body = await bodyPromise
+          const manifestResponse = await manifestPromises[body.msgId]
+          delete manifestPromises[body.msgId]
+          res.end(JSON.stringify(manifestResponse))
+          break
+        case '/updateConnections':
+          body = await bodyPromise
+          await store.updateConnections(body.prefix, body.opts)
+          res.end(JSON.stringify('OK'))
+          break
+        case '/prune':
+          await store.prune()
+          res.end(JSON.stringify('OK'))
+          break
+        case '/saveState':
+          await store.saveState()
+          res.end(JSON.stringify('OK'))
+          break
+        default:
+          res.statusCode = 404
+          res.end(`${req.url} does not match any route`)
       }
-    })
+    } catch (e) {
+      res.statusCode = 503
+      res.end(JSON.stringify(e.message))
+    }
   })
 
   let listener: Server;
