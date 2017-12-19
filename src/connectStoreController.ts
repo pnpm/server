@@ -46,7 +46,7 @@ function fetch(limit: (fn: () => PromiseLike<object>) => Promise<object>, url: s
       method: 'POST',
       retries: () => {
         return 100
-      }
+      },
     })
     return JSON.parse(response.body)
   })
