@@ -11,10 +11,17 @@ import uuid = require('uuid')
 
 export default function (
   initOpts: {
-    path: string;
+    path?: string,
+    port?: number,
+    hostname?: string,
   },
 ): Promise<StoreController> {
-  const remotePrefix = `http://unix:${initOpts.path}:`
+  let remotePrefix: string
+  if (initOpts.path) {
+    remotePrefix = `http://unix:${initOpts.path}:`
+  } else {
+    remotePrefix = `http://${initOpts.hostname}:${initOpts.port}`
+  }
   const limitedRetryFetch = retryFetch.bind(null, pLimit(100))
 
   return new Promise((resolve, reject) => {

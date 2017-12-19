@@ -1,12 +1,14 @@
 import http = require('http')
 
-import {IncomingMessage, ServerResponse} from 'http'
+import {IncomingMessage, Server, ServerResponse} from 'http'
 import {StoreController} from 'package-store'
 
 export default function (
   store: StoreController,
   opts: {
-    path: string;
+    path?: string,
+    port?: number,
+    hostname?: string,
   },
 ) {
   const manifestPromises = {}
@@ -71,7 +73,12 @@ export default function (
     })
   })
 
-  const listener = server.listen(opts.path)
+  let listener: Server;
+  if (opts.path) {
+    listener = server.listen(opts.path)
+  } else {
+    listener = server.listen(opts.port, opts.hostname)
+  }
 
   return {
     close: () => listener.close(() => { return }),
