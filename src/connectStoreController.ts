@@ -1,14 +1,11 @@
 import {
   PackageResponse,
-  RequestPackageFunction,
   RequestPackageOptions,
-  Resolution,
   WantedDependency,
 } from '@pnpm/package-requester'
 
+import got = require('got')
 import pLimit = require('p-limit')
-import request = require('request-promise-native')
-
 import {StoreController} from 'package-store'
 import uuid = require('uuid')
 
@@ -18,86 +15,63 @@ export default function (
   },
 ): Promise<StoreController> {
   const remotePrefix = `http://unix:${initOpts.path}:`
-  const limitedRetryRequest = retryRequest.bind(null, pLimit(100))
+  const limitedRetryFetch = retryFetch.bind(null, pLimit(100))
 
   return new Promise((resolve, reject) => {
     resolve({
       close: async () => { return },
       prune: async () => {
-        await limitedRetryRequest({
-          json: true,
-          method: 'POST',
-          url: `${remotePrefix}/prune`,
-        })
+        await limitedRetryFetch(`${remotePrefix}/prune`, {})
       },
-      requestPackage: requestPackage.bind(null, remotePrefix, limitedRetryRequest),
+      requestPackage: requestPackage.bind(null, remotePrefix, limitedRetryFetch),
       saveState: async () => {
-        await limitedRetryRequest({
-          json: true,
-          method: 'POST',
-          url: `${remotePrefix}/saveState`,
-        })
+        await limitedRetryFetch(`${remotePrefix}/saveState`, {})
       },
       updateConnections: async (prefix: string, opts: {addDependencies: string[], removeDependencies: string[], prune: boolean}) => {
-        await limitedRetryRequest({
-          body: {
-            opts,
-            prefix,
-          },
-          json: true,
-          method: 'POST',
-          url: `${remotePrefix}/updateConnections`,
+        await limitedRetryFetch(`${remotePrefix}/updateConnections`, {
+          opts,
+          prefix,
         })
       },
     })
   })
 }
 
-function retryRequest<T> (limit: (fn: () => PromiseLike<T>) => Promise<T>, options: any): any { // tslint:disable-line
-  return limit(() => {
-    return request(options)
+function retryFetch (limit: (fn: () => PromiseLike<object>) => Promise<object>, url: string, body: object): Promise<object> { // tslint:disable-line
+  return limit(async () => {
+    const response = await got(url, {
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    })
+    return JSON.parse(response.body)
   }).catch((e) => {
     if (!e.message.startsWith('Error: connect ECONNRESET') && !e.message.startsWith('Error: connect ECONNREFUSED')) {
       throw e
     }
-    return retryRequest(limit, options)
+    return retryFetch(limit, url, body)
   })
 }
 
 function requestPackage (
   remotePrefix: string,
-  limitedRetryRequest: (options: any) => any, // tslint:disable-line
+  limitedRetryFetch: (url: string, body: object) => any, // tslint:disable-line
   wantedDependency: WantedDependency,
   options: RequestPackageOptions,
 ): Promise<PackageResponse> {
   const msgId = uuid.v4()
 
-  return limitedRetryRequest({
-    body: {
-      msgId,
-      options,
-      wantedDependency,
-    },
-    json: true,
-    method: 'POST',
-    url: `${remotePrefix}/requestPackage`,
+  return limitedRetryFetch(`${remotePrefix}/requestPackage`, {
+    msgId,
+    options,
+    wantedDependency,
   })
   .then((packageResponse: PackageResponse) => {
-    const fetchingManifest = limitedRetryRequest({
-      body: {
-        msgId,
-      },
-      json: true,
-      method: 'POST',
-      url: `${remotePrefix}/manifestResponse`,
+    const fetchingManifest = limitedRetryFetch(`${remotePrefix}/manifestResponse`, {
+      msgId,
     })
-    const fetchingFiles = limitedRetryRequest({
-      body: {
-        msgId,
-      },
-      json: true,
-      method: 'POST',
-      url: `${remotePrefix}/packageFilesResponse`,
+    const fetchingFiles = limitedRetryFetch(`${remotePrefix}/packageFilesResponse`, {
+      msgId,
     })
     return Object.assign(packageResponse, {
       fetchingFiles,
