@@ -44,7 +44,9 @@ function fetch(limit: (fn: () => PromiseLike<object>) => Promise<object>, url: s
       body: JSON.stringify(body),
       headers: {'Content-Type': 'application/json'},
       method: 'POST',
-      retries: 1000,  // picking a very large number to be sure it keeps retrying as long as needed
+      retries: () => {
+        return 100
+      }
     })
     return JSON.parse(response.body)
   })
