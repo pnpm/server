@@ -38,7 +38,7 @@ export default function (
   })
 }
 
-function fetch(limit: (fn: () => PromiseLike<object>) => Promise<object>, url: string, body: object): Promise<object> { // tslint:disable-line
+function fetch(limit: (fn: () => PromiseLike<object>) => Promise<object>, url: string, body: object): Promise<object | undefined> { // tslint:disable-line
   return limit(async () => {
     const response = await got(url, {
       body: JSON.stringify(body),
@@ -49,7 +49,7 @@ function fetch(limit: (fn: () => PromiseLike<object>) => Promise<object>, url: s
       },
     })
     if (!response.body) {
-      return {}
+      return undefined
     }
     return JSON.parse(response.body)
   })
