@@ -48,6 +48,9 @@ function fetch(limit: (fn: () => PromiseLike<object>) => Promise<object>, url: s
         return 100
       },
     })
+    if (!response.body) {
+      return {}
+    }
     return JSON.parse(response.body)
   })
 }
