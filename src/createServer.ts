@@ -97,6 +97,11 @@ export default function (
           await store.importPackage(importPackageBody.from, importPackageBody.to, importPackageBody.opts)
           res.end(JSON.stringify('OK'))
           break
+        case '/upload':
+          const uploadBody = (await bodyPromise) as any // tslint:disable-line:no-any
+          await store.upload(uploadBody.nodeVersion, uploadBody.pkg)
+          res.end(JSON.stringify('OK'))
+          break
         default:
           res.statusCode = 404
           res.end(`${req.url} does not match any route`)
