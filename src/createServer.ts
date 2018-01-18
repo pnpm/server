@@ -1,7 +1,10 @@
+import logger from '@pnpm/logger'
+import {
+  RequestPackageOptions,
+  WantedDependency,
+} from '@pnpm/package-requester'
 import http = require('http')
 import {IncomingMessage, Server, ServerResponse} from 'http'
-
-import {RequestPackageOptions, WantedDependency} from '@pnpm/package-requester'
 import {StoreController} from 'package-store'
 
 interface RequestBody {
@@ -22,6 +25,7 @@ export default function (
     path?: string,
     port?: number,
     hostname?: string,
+    ignoreStopRequests?: boolean,
   },
 ) {
   const manifestPromises = {}
@@ -102,6 +106,17 @@ export default function (
           await store.upload(uploadBody.builtPkgLocation, uploadBody.opts)
           res.end(JSON.stringify('OK'))
           break
+        case '/stop':
+          if (opts.ignoreStopRequests) {
+            res.statusCode = 403
+            res.end()
+            break
+          }
+          logger.info('Got request to stop the server')
+          await close()
+          res.end(JSON.stringify('OK'))
+          logger.info('Server stopped')
+          break
         default:
           res.statusCode = 404
           res.end(`${req.url} does not match any route`)
@@ -119,7 +134,10 @@ export default function (
     listener = server.listen(opts.port, opts.hostname)
   }
 
-  return {
-    close: () => listener.close(() => { return }),
+  return { close }
+
+  function close () {
+    listener.close()
+    return store.close()
   }
 }
