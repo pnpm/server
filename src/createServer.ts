@@ -99,7 +99,7 @@ export default function (
           break
         case '/upload':
           const uploadBody = (await bodyPromise) as any // tslint:disable-line:no-any
-          await store.upload(uploadBody.nodeVersion, uploadBody.pkg)
+          await store.upload(uploadBody.builtPkgLocation, uploadBody.opts)
           res.end(JSON.stringify('OK'))
           break
         default:

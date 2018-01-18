@@ -45,10 +45,10 @@ export default function (
           prefix,
         })
       },
-      upload: async (nodeVersion: string, pkg: {peripheralLocation: string, id: string}) => {
+      upload: async (builtPkgLocation: string, opts: {pkgId: string, nodeVersion: string}) => {
         await limitedFetch(`${remotePrefix}/upload`, {
-          nodeVersion,
-          pkg,
+          builtPkgLocation,
+          opts,
         })
       },
     })
