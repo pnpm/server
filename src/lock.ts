@@ -13,7 +13,8 @@ export default function lock<T> (): LockedFunc<T> {
   return (key: string, fn: () => Promise<T>): Promise<T> => {
     if (locks[key]) return locks[key]
     locks[key] = fn()
-    fn().then(() => delete locks[key])
+    fn()
+    .then(() => delete locks[key], () => delete locks[key])
     return locks[key]
   }
 }
