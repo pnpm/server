@@ -7,6 +7,8 @@ import http = require('http')
 import {IncomingMessage, Server, ServerResponse} from 'http'
 import {StoreController} from 'package-store'
 
+import locking from './lock'
+
 interface RequestBody {
   msgId: string,
   wantedDependency: WantedDependency,
@@ -30,6 +32,8 @@ export default function (
 ) {
   const manifestPromises = {}
   const filesPromises = {}
+
+  const lock = locking<void>()
 
   const server = http.createServer(async (req: IncomingMessage, res: ServerResponse) => {
     if (req.method !== 'POST') {
@@ -103,7 +107,7 @@ export default function (
           break
         case '/upload':
           const uploadBody = (await bodyPromise) as any // tslint:disable-line:no-any
-          await store.upload(uploadBody.builtPkgLocation, uploadBody.opts)
+          await lock(uploadBody.builtPkgLocation, () => store.upload(uploadBody.builtPkgLocation, uploadBody.opts))
           res.end(JSON.stringify('OK'))
           break
         case '/stop':
