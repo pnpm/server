@@ -50,7 +50,7 @@ export default function (
           prefix,
         })
       },
-      upload: async (builtPkgLocation: string, opts: {pkgId: string, engineName: string, verifyStoreIntegrity: boolean}) => {
+      upload: async (builtPkgLocation: string, opts: {pkgId: string, engine: string}) => {
         await limitedFetch(`${remotePrefix}/upload`, {
           builtPkgLocation,
           opts,
