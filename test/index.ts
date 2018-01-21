@@ -98,9 +98,8 @@ test('server upload', async t => {
   })
 
   const cachePath = path.join('.store', fakePkgId, 'side_effects', fakeEngine, 'package')
-  t.ok(await fs.exists(cachePath), 'cache not uploaded')
-  t.ok(await fs.exists(path.join(cachePath, 'side-effect.js')), 'cache not uploaded: missing side-effect.js')
-  t.ok(await fs.exists(path.join(cachePath, 'side-effect.txt')), 'cache not uploaded: missing side-effect.txt')
+  t.ok(await fs.exists(cachePath), 'cache directory created')
+  t.deepEqual(await fs.readdir(cachePath), ['side-effect.js', 'side-effect.txt'], 'all files uploaded to cache')
 
   await server.close()
   await storeCtrl.close()
