@@ -16,6 +16,7 @@ devDependencies:
   is-port-reachable: 2.0.0
   mos: 2.0.0-alpha.3
   mos-plugin-readme: 1.0.4
+  mz: 2.7.0
   package-preview: 1.0.4
   rimraf: 2.6.2
   tape: 4.8.0
@@ -4011,6 +4012,7 @@ specifiers:
   is-port-reachable: ^2.0.0
   mos: ^2.0.0-alpha.3
   mos-plugin-readme: ^1.0.4
+  mz: ^2.7.0
   p-limit: ^1.1.0
   package-preview: ^1.0.1
   package-store: ^0.15.1
