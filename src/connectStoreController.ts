@@ -18,6 +18,7 @@ export default function (
   initOpts: {
     remotePrefix: string,
     concurrency?: number,
+    packageImportMethod: 'auto' | 'hardlink' | 'copy' | 'reflink',
   },
 ): Promise<StoreServerController> {
   const remotePrefix = initOpts.remotePrefix
@@ -26,13 +27,15 @@ export default function (
   return new Promise((resolve, reject) => {
     resolve({
       close: async () => { return },
+      // this importPackage does not take a packageImportMethod, because on a client connecting to the pnpm server, we
+      // can use directly the packageImportMethod specified in the initOpts
       importPackage: async (from: string, to: string, opts: {
         filesResponse: PackageFilesResponse,
         force: boolean,
       }) => {
         await limitedFetch(`${remotePrefix}/importPackage`, {
           from,
-          opts,
+          opts: Object.assign(opts, { packageImportMethod: initOpts.packageImportMethod }),
           to,
         })
       },

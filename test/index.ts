@@ -45,8 +45,8 @@ test('server', async t => {
   const remotePrefix = `http://${hostname}:${port}`
   const storeCtrlForServer = await createStoreController()
   const server = createServer(storeCtrlForServer, {
-    port,
     hostname,
+    port,
   })
   const storeCtrl = await connectStoreController({remotePrefix, concurrency: 100})
   const response = await storeCtrl.requestPackage(

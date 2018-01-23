@@ -28,6 +28,8 @@ export default function (
     port?: number,
     hostname?: string,
     ignoreStopRequests?: boolean,
+    ignorePackageImportMethod?: boolean,
+    storePackageImportMethod: 'auto' | 'hardlink' | 'copy' | 'reflink',
   },
 ) {
   const manifestPromises = {}
@@ -102,6 +104,11 @@ export default function (
           break
         case '/importPackage':
           const importPackageBody = (await bodyPromise) as any // tslint:disable-line:no-any
+          if (opts.ignorePackageImportMethod && importPackageBody.opts.packageImportMethod && (opts.storePackageImportMethod !== importPackageBody.opts.packageImportMethod)) {
+            res.statusCode = 403
+            res.end()
+            break
+          }
           await store.importPackage(importPackageBody.from, importPackageBody.to, importPackageBody.opts)
           res.end(JSON.stringify('OK'))
           break
