@@ -104,7 +104,7 @@ export default function (
           break
         case '/importPackage':
           const importPackageBody = (await bodyPromise) as any // tslint:disable-line:no-any
-          if (opts.ignorePackageImportMethod && (opts.storePackageImportMethod !== importPackageBody.opts.packageImportMethod)) {
+          if (opts.ignorePackageImportMethod && importPackageBody.opts.packageImportMethod && (opts.storePackageImportMethod !== importPackageBody.opts.packageImportMethod)) {
             res.statusCode = 403
             res.end()
             break
