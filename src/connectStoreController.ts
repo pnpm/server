@@ -1,3 +1,4 @@
+import logger from '@pnpm/logger'
 import {
   PackageFilesResponse,
   PackageResponse,
@@ -51,10 +52,18 @@ export default function (
         })
       },
       upload: async (builtPkgLocation: string, opts: {pkgId: string, engine: string}) => {
-        await limitedFetch(`${remotePrefix}/upload`, {
-          builtPkgLocation,
-          opts,
-        })
+        try {
+          await limitedFetch(`${remotePrefix}/upload`, {
+            builtPkgLocation,
+            opts,
+          })
+        } catch (e) {
+          if (e.statusCode === 403) {
+            logger.warn('Permission denied when trying to upload ' + opts.pkgId)
+          } else {
+            throw e
+          }
+        }
       },
     })
   })
