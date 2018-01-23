@@ -109,7 +109,8 @@ export default function (
         case '/upload':
           // Do not return an error status code, just ignore the upload request entirely
           if (opts.ignoreUploadRequests) {
-            res.end(JSON.stringify('IGNORED'))
+            res.statusCode = 403
+            res.end()
             break
           }
           const uploadBody = (await bodyPromise) as any // tslint:disable-line:no-any
