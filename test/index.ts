@@ -124,16 +124,10 @@ test('disable server upload', async t => {
   const fakeEngine = 'client-engine'
   const fakePkgId = 'test.example.com/fake-pkg/1.0.0'
 
-  let thrown = false
-  try {
-    await storeCtrl.upload(path.join(__dirname, 'side-effect-fake-dir'), {
-      engine: fakeEngine,
-      pkgId: fakePkgId,
-    })
-  } catch (e) {
-    thrown = true
-  }
-  t.ok(thrown, 'error is thrown when trying to upload')
+  await storeCtrl.upload(path.join(__dirname, 'side-effect-fake-dir'), {
+    engine: fakeEngine,
+    pkgId: fakePkgId,
+  })
 
   const cachePath = path.join('.store', fakePkgId, 'side_effects', fakeEngine, 'package')
   t.notOk(await fs.exists(cachePath), 'cache directory not created')
