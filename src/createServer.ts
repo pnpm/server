@@ -134,13 +134,9 @@ export default function (
       }
     } catch (e) {
       res.statusCode = 503
-      res.end(JSON.stringify({
-        code: e.code,
-        message: e.message,
-        package: e.package,
-        response: e.response,
-        uri: e.uri,
-      }))
+      const jsonErr = JSON.parse(JSON.stringify(e))
+      jsonErr.message = e.message
+      res.end(JSON.stringify(jsonErr))
     }
   })
 
