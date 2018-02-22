@@ -76,7 +76,7 @@ function fetch(limit: (fn: () => PromiseLike<object>) => Promise<object>, url: s
       }
       return JSON.parse(response.body)
     } catch (e) {
-      throw new Error(JSON.parse(e.response.body))
+      throw JSON.parse(e.response.body)
     }
   })
 }

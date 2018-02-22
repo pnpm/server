@@ -105,6 +105,10 @@ test('server errors should arrive to the client', async t => {
   } catch (e) {
     caught = true
     t.equal(e.message, '404 Not Found: not-an-existing-package', 'error message delivered correctly')
+    t.equal(e.code, 'E404', 'error code delivered correctly')
+    t.ok(e.uri, 'error uri field delivered')
+    t.ok(e.response, 'error response field delivered')
+    t.ok(e.package, 'error package field delivered')
   }
   t.ok(caught, 'exception raised correctly')
 
