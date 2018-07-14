@@ -1,7 +1,6 @@
 dependencies:
   '@pnpm/package-requester': 4.0.0
   '@pnpm/resolver-base': 1.1.0
-  '@pnpm/server': 'link:../__package_previews__/server/@pnpm/server'
   '@pnpm/types': 1.7.0
   '@types/got': 8.3.3
   '@types/node': 10.5.2
@@ -3954,7 +3953,7 @@ registry: 'https://registry.npmjs.org/'
 shrinkwrapMinorVersion: 8
 shrinkwrapVersion: 3
 specifiers:
-  '@pnpm/logger': ^2.1.0
+  '@pnpm/logger': ^2.0.1
   '@pnpm/npm-resolver': ^1.0.0
   '@pnpm/package-requester': ^4.0.0
   '@pnpm/resolver-base': ^1.1.0
