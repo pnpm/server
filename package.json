@@ -68,7 +68,7 @@
     "@types/node": "^10.0.6",
     "@types/p-limit": "^2.0.0",
     "@types/uuid": "^3.4.3",
-    "got": "^8.0.1",
+    "got": "^9.0.0",
     "p-limit": "^2.0.0",
     "package-store": "^0.23.0",
     "uuid": "^3.1.0"
